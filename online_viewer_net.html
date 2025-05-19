@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Soccer Showdown</title>
+    <style>
+        body { margin: 0; background: #228b22; display: flex; justify-content: center; align-items: center; height: 100vh; }
+        canvas { border: 2px solid #fff; max-width: 100%; max-height: 100%; }
+        #ui { position: absolute; top: 10px; left: 10px; color: #fff; font-family: Arial; }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <div id="score">Score: 0 - 0</div>
+        <div id="time">Time: 3:00</div>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 800;
+        canvas.height = 600;
+        let player = { x: 200, y: 300, vx: 0, vy: 0 };
+        let ai = { x: 600, y: 300, vx: 0, vy: 0 };
+        let ball = { x: 400, y: 300, vx: 0, vy: 0 };
+        let score = { player: 0, ai: 0 }, time = 180, highScore = localStorage.getItem('highScore') || 0;
+
+        document.addEventListener('keydown', e => {
+            const speed = 5;
+            player.vx = e.key === 'a' ? -speed : e.key === 'd' ? speed : player.vx;
+            player.vy = e.key === 'w' ? -speed : e.key === 's' ? speed : player.vy;
+            if (e.key === ' ') kickBall(player);
+        });
+        document.addEventListener('keyup', e => {
+            player.vx = e.key === 'a' || e.key === 'd' ? 0 : player.vx;
+            player.vy = e.key === 'w' || e.key === 's' ? 0 : player.vy;
+        });
+        canvas.addEventListener('touchmove', e => {
+            e.preventDefault();
+            const rect = canvas.getBoundingClientRect();
+            const touch = e.touches[0];
+            const tx = (touch.clientX - rect.left) * (canvas.width / rect.width);
+            const ty = (touch.clientY - rect.top) * (canvas.height / rect.height);
+            const dx = tx - player.x, dy = ty - player.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist > 0) {
+                player.vx = (dx / dist) * 5;
+                player.vy = (dy / dist) * 5;
+            }
+        });
+        canvas.addEventListener('touchend', () => { player.vx = 0; player.vy = 0; });
+        canvas.addEventListener('touchstart', () => kickBall(player));
+
+        function kickBall(p) {
+            if (Math.hypot(p.x - ball.x, p.y - ball.y) < 30) {
+                const dx = ball.x - p.x, dy = ball.y - p.y;
+                ball.vx = dx * 0.2;
+                ball.vy = dy * 0.2;
+            }
+        }
+
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            player.x += player.vx;
+            player.y += player.vy;
+            player.x = Math.max(0, Math.min(canvas.width, player.x));
+            player.y = Math.max(50, Math.min(canvas.height - 50, player.y));
+            ctx.fillStyle = '#00f';
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, 10, 0, Math.PI * 2);
+            ctx.fill();
+            ai.vx = (ball.x - ai.x) * 0.05;
+            ai.vy = (ball.y - ai.y) * 0.05;
+            ai.x += ai.vx;
+            ai.y += ai.vy;
+            ai.x = Math.max(0, Math.min(canvas.width, ai.x));
+            ai.y = Math.max(50, Math.min(canvas.height - 50, ai.y));
+            ctx.fillStyle = '#f00';
+            ctx.beginPath();
+            ctx.arc(ai.x, ai.y, 10, 0, Math.PI * 2);
+            ctx.fill();
+            ball.x += ball.vx;
+            ball.y += ball.vy;
+            ball.vx *= 0.99;
+            ball.vy *= 0.99;
+            if (ball.x < 0 || ball.x > canvas.width) {
+                if (ball.y > 200 && ball.y < 400) {
+                    if (ball.x < 0) score.ai++;
+                    else score.player++;
+                    if (score.player > highScore) {
+                        highScore = score.player;
+                        localStorage.setItem('highScore', highScore);
+                    }
+                    ball.x = 400;
+                    ball.y = 300;
+                    ball.vx = 0;
+                    ball.vy = 0;
+                    player.x = 200;
+                    player.y = 300;
+                    ai.x = 600;
+                    ai.y = 300;
+                }
+                ball.vx *= -0.8;
+            }
+            if (ball.y < 50 || ball.y > canvas.height - 50) ball.vy *= -0.8;
+            ball.x = Math.max(0, Math.min(canvas.width, ball.x));
+            ball.y = Math.max(50, Math.min(canvas.height - 50, ball.y));
+            ctx.fillStyle = '#fff';
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, 5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#fff';
+            ctx.strokeRect(0, 50, canvas.width, canvas.height - 100);
+            ctx.beginPath();
+            ctx.arc(canvas.width / 2, canvas.height / 2, 50, 0, Math.PI * 2);
+            ctx.stroke();
+            document.getElementById('score').innerText = `Score: ${score.player} - ${score.ai}`;
+            requestAnimationFrame(gameLoop);
+        }
+
+        setInterval(() => {
+            time--;
+            const minutes = Math.floor(time / 60);
+            const seconds = time % 60;
+            document.getElementById('time').innerText = `Time: ${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+            if (time <= 0) {
+                alert(`Game Over! Final Score: ${score.player} - ${score.ai}\nHigh Score: ${highScore}`);
+                window.location.reload();
+            }
+        }, 1000);
+
+        requestAnimationFrame(gameLoop);
+    </script>
+</body>
+</html>

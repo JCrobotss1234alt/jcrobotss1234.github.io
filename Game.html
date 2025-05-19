@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Super Spy: Mission Impossible</title>
+    <style>
+        body { margin: 0; background: #111; display: flex; justify-content: center; align-items: center; height: 100vh; }
+        canvas { border: 2px solid #00ff00; max-width: 100%; max-height: 100%; }
+        #ui { position: absolute; top: 10px; left: 10px; color: #00ff00; font-family: Arial; }
+        input { padding: 5px; margin: 5px; }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <input type="text" id="username" placeholder="Enter username">
+        <div id="hint"></div>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 800;
+        canvas.height = 600;
+        let player = { x: 50, y: 50, vx: 0, vy: 0, username: '' };
+        let lasers = [], powerUps = [], level = 1, code = '1234', gameOver = false;
+
+        function initLevel() {
+            lasers = level === 1 ? [{ x: 200, y: 100, length: 400, speed: 2, dir: 'v' }] : level === 2 ? [{ x: 300, y: 150, length: 300, speed: 3, dir: 'h' }, { x: 400, y: 200, length: 200, speed: -2, dir: 'v' }] : level === 3 ? [{ x: 250, y: 100, length: 400, speed: 4, dir: 'h' }, { x: 350, y: 300, length: 200, speed: -3, dir: 'v' }, { x: 450, y: 150, length: 300, speed: 2, dir: 'h' }] : level === 4 ? [{ x: 200, y: 100, length: 500, speed: 5, dir: 'v' }, { x: 300, y: 200, length: 400, speed: -4, dir: 'h' }, { x: 400, y: 300, length: 200, speed: 3, dir: 'v' }, { x: 500, y: 100, length: 300, speed: -2, dir: 'h' }] : [{ x: 150, y: 100, length: 500, speed: 6, dir: 'h' }, { x: 250, y: 200, length: 400, speed: -5, dir: 'v' }, { x: 350, y: 300, length: 300, speed: 4, dir: 'h' }, { x: 450, y: 100, length: 200, speed: -3, dir: 'v' }, { x: 550, y: 200, length: 400, speed: 2, dir: 'h' }];
+            powerUps = [{ x: Math.random() * 700 + 50, y: Math.random() * 500 + 50 }];
+            document.getElementById('hint').innerText = `Hint: Code starts with ${code[0]}`;
+        }
+
+        document.getElementById('username').addEventListener('change', () => player.username = document.getElementById('username').value || 'Spy');
+        document.addEventListener('keydown', e => {
+            const speed = 5;
+            player.vx = e.key === 'a' ? -speed : e.key === 'd' ? speed : player.vx;
+            player.vy = e.key === 'w' ? -speed : e.key === 's' ? speed : player.vy;
+        });
+        document.addEventListener('keyup', e => {
+            player.vx = e.key === 'a' || e.key === 'd' ? 0 : player.vx;
+            player.vy = e.key === 'w' || e.key === 's' ? 0 : player.vy;
+        });
+        canvas.addEventListener('touchmove', e => {
+            e.preventDefault();
+            const rect = canvas.getBoundingClientRect();
+            const touch = e.touches[0];
+            const tx = (touch.clientX - rect.left) * (canvas.width / rect.width);
+            const ty = (touch.clientY - rect.top) * (canvas.height / rect.height);
+            const dx = tx - player.x, dy = ty - player.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist > 0) {
+                player.vx = (dx / dist) * 5;
+                player.vy = (dy / dist) * 5;
+            }
+        });
+        canvas.addEventListener('touchend', () => { player.vx = 0; player.vy = 0; });
+
+        function gameLoop(timestamp) {
+            if (gameOver) return;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            player.x += player.vx;
+            player.y += player.vy;
+            player.x = Math.max(0, Math.min(canvas.width, player.x));
+            player.y = Math.max(0, Math.min(canvas.height, player.y));
+            ctx.fillStyle = '#00ff00';
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, 10, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillText(player.username, player.x, player.y - 20);
+            lasers.forEach(l => {
+                if (l.dir === 'h') l.y += l.speed; else l.x += l.speed;
+                if (l.dir === 'h' && (l.y < 0 || l.y > canvas.height - l.length)) l.speed *= -1;
+                if (l.dir === 'v' && (l.x < 0 || l.x > canvas.width - l.length)) l.speed *= -1;
+                ctx.strokeStyle = '#ff0000';
+                ctx.beginPath();
+                if (l.dir === 'h') ctx.moveTo(l.x, l.y), ctx.lineTo(l.x + l.length, l.y);
+                else ctx.moveTo(l.x, l.y), ctx.lineTo(l.x, l.y + l.length);
+                ctx.stroke();
+                if (l.dir === 'h' && player.x > l.x && player.x < l.x + l.length && Math.abs(player.y - l.y) < 10 ||
+                    l.dir === 'v' && player.y > l.y && player.y < l.y + l.length && Math.abs(player.x - l.x) < 10) {
+                    gameOver = true;
+                    alert('Game Over! Restarting...');
+                    window.location.reload();
+                }
+            });
+            powerUps.forEach(p => {
+                ctx.fillStyle = '#ffd700';
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+                ctx.fill();
+                if (Math.hypot(player.x - p.x, player.y - p.y) < 15) {
+                    powerUps = [];
+                    if (level < 5) {
+                        level++;
+                        initLevel();
+                    } else {
+                        let guess = prompt('Enter bomb code:');
+                        if (guess === code) alert('Mission Complete!');
+                        else alert('Wrong code! Try again.');
+                    }
+                }
+            });
+            requestAnimationFrame(gameLoop);
+        }
+
+        initLevel();
+        requestAnimationFrame(gameLoop);
+    </script>
+</body>
+</html>

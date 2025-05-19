@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Catch the Falling Stars</title>
+    <style>
+        body { margin: 0; background: linear-gradient(135deg, #0f0c29, #302b63, #24243e); display: flex; justify-content: center; align-items: center; height: 100vh; }
+        canvas { border: 2px solid #fff; max-width: 100%; max-height: 100%; }
+        #ui { position: absolute; top: 10px; left: 10px; color: #fff; font-family: Arial; }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <div id="score">Score: 0</div>
+        <div id="lives">Lives: 3</div>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 800;
+        canvas.height = 600;
+        let basket = { x: 400, y: 550, vx: 0, width: 100 };
+        let stars = [], comets = [], powerUps = [], score = 0, lives = 3;
+
+        document.addEventListener('keydown', e => {
+            basket.vx = e.key === 'a' ? -10 : e.key === 'd' ? 10 : basket.vx;
+        });
+        document.addEventListener('keyup', e => {
+            basket.vx = e.key === 'a' || e.key === 'd' ? 0 : basket.vx;
+        });
+        canvas.addEventListener('touchmove', e => {
+            e.preventDefault();
+            const rect = canvas.getBoundingClientRect();
+            const touch = e.touches[0];
+            const tx = (touch.clientX - rect.left) * (canvas.width / rect.width);
+            basket.x = tx - basket.width / 2;
+        });
+
+        function spawnStar() {
+            stars.push({ x: Math.random() * canvas.width, y: 0, vy: 5, color: `hsl(${Math.random() * 360}, 100%, 50%)` });
+        }
+
+        function spawnComet() {
+            comets.push({ x: Math.random() * canvas.width, y: 0, vy: 7 });
+        }
+
+        function spawnPowerUp() {
+            powerUps.push({ x: Math.random() * canvas.width, y: 0, vy: 4, type: 'life' });
+        }
+
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            basket.x += basket.vx;
+            basket.x = Math.max(0, Math.min(canvas.width - basket.width, basket.x));
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(basket.x, basket.y, basket.width, 20);
+            stars.forEach(s => {
+                s.y += s.vy;
+                ctx.fillStyle = s.color;
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, 5, 0, Math.PI * 2);
+                ctx.fill();
+                if (s.y > basket.y && s.y < basket.y + 20 && s.x > basket.x && s.x < basket.x + basket.width) {
+                    score += 10;
+                    stars.splice(stars.indexOf(s), 1);
+                }
+            });
+            comets.forEach(c => {
+                c.y += c.vy;
+                ctx.fillStyle = '#ff4500';
+                ctx.beginPath();
+                ctx.arc(c.x, c.y, 7, 0, Math.PI * 2);
+                ctx.fill();
+                if (c.y > basket.y && c.y < basket.y + 20 && c.x > basket.x && c.x < basket.x + basket.width) {
+                    lives--;
+                    comets.splice(comets.indexOf(c), 1);
+                    if (lives <= 0) {
+                        alert('Game Over! Score: ' + score);
+                        window.location.reload();
+                    }
+                }
+            });
+            powerUps.forEach(p => {
+                p.y += p.vy;
+                ctx.fillStyle = '#ffd700';
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+                ctx.fill();
+                if (p.y > basket.y && p.y < basket.y + 20 && p.x > basket.x && p.x < basket.x + basket.width) {
+                    lives++;
+                    powerUps.splice(powerUps.indexOf(p), 1);
+                }
+            });
+            document.getElementById('score').innerText = `Score: ${score}`;
+            document.getElementById('lives').innerText = `Lives: ${lives}`;
+            requestAnimationFrame(gameLoop);
+        }
+
+        setInterval(spawnStar, 500);
+        setInterval(spawnComet, 2000);
+        setInterval(spawnPowerUp, 10000);
+        requestAnimationFrame(gameLoop);
+    </script>
+</body>
+</html>

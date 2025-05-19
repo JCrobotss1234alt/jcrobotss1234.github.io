@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nebula Blitz</title>
+    <style>
+        body { margin: 0; background: #000; display: flex; justify-content: center; align-items: center; height: 100vh; }
+        canvas { border: 2px solid #ff00ff; max-width: 100%; max-height: 100%; }
+        #ui { position: absolute; top: 10px; left: 10px; color: #ff00ff; font-family: Arial; }
+        input { padding: 5px; margin: 5px; }
+        #joystick { position: fixed; bottom: 20px; left: 20px; width: 100px; height: 100px; background: rgba(255, 255, 255, 0.2); border-radius: 50%; display: none; }
+        #knob { width: 40px; height: 40px; background: #ff00ff; border-radius: 50%; position: absolute; top: 30px; left: 30px; }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <input type="text" id="username" placeholder="Enter username">
+        <div id="score">Score: 0</div>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+    <div id="joystick"><div id="knob"></div></div>
+    <script src="https://cdn.ably.io/lib/ably.min-1.js"></script>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 800;
+        canvas.height = 600;
+        let player = { x: 400, y: 500, vx: 0, vy: 0, score: 0, username: '', shooting: false };
+        let enemies = [], bullets = [], powerUps = [], clientId = Math.random().toString(36).substring(2, 15);
+        const ably = new Ably.Realtime({ key: 'mfo8_A.lo9euw:RDt1mSHEidRCcMwOQPtkti3YpWBrLWBQRKwjyNpAhaM', clientId: clientId });
+        const channel = ably.channels.get('nebula-blitz');
+
+        document.getElementById('username').addEventListener('change', () => player.username = document.getElementById('username').value || 'Pilot');
+        document.addEventListener('keydown', e => {
+            const speed = 5;
+            player.vx = e.key === 'a' ? -speed : e.key === 'd' ? speed : player.vx;
+            player.vy = e.key === 'w' ? -speed : e.key === 's' ? speed : player.vy;
+            if (e.key === ' ') player.shooting = true;
+        });
+        document.addEventListener('keyup', e => {
+            player.vx = e.key === 'a' || e.key === 'd' ? 0 : player.vx;
+            player.vy = e.key === 'w' || e.key === 's' ? 0 : player.vy;
+            if (e.key === ' ') player.shooting = false;
+        });
+
+        const joystick = document.getElementById('joystick');
+        const knob = document.getElementById('knob');
+        let joystickActive = false;
+        joystick.addEventListener('touchstart', e => {
+            joystick.style.display = 'block';
+            joystickActive = true;
+        });
+        joystick.addEventListener('touchmove', e => {
+            e.preventDefault();
+            const rect = joystick.getBoundingClientRect();
+            const touch = e.touches[0];
+            const cx = rect.left + 50, cy = rect.top + 50;
+            const tx = touch.clientX, ty = touch.clientY;
+            const dx = tx - cx, dy = ty - cy;
+            const dist = Math.min(50, Math.sqrt(dx * dx + dy * dy));
+            const angle = Math.atan2(dy, dx);
+            knob.style.left = 50 + dist * Math.cos(angle) - 20 + 'px';
+            knob.style.top = 50 + dist * Math.sin(angle) - 20 + 'px';
+            player.vx = (dx / 50) * 5;
+            player.vy = (dy / 50) * 5;
+            player.shooting = dist > 20;
+        });
+        joystick.addEventListener('touchend', () => {
+            knob.style.left = '30px';
+            knob.style.top = '30px';
+            player.vx = 0;
+            player.vy = 0;
+            player.shooting = false;
+            joystickActive = false;
+            joystick.style.display = 'none';
+        });
+
+        function spawnEnemy() {
+            const side = Math.random() < 0.5 ? 'top' : 'side';
+            const x = side === 'top' ? Math.random() * canvas.width : Math.random() < 0.5 ? -50 : canvas.width + 50;
+            const y = side === 'top' ? -50 : Math.random() * canvas.height;
+            enemies.push({ x, y, vx: (player.x - x) / 100, vy: (player.y - y) / 100 });
+        }
+
+        let lastShot = 0;
+        function gameLoop(timestamp) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            player.x += player.vx;
+            player.y += player.vy;
+            player.x = Math.max(0, Math.min(canvas.width, player.x));
+            player.y = Math.max(0, Math.min(canvas.height, player.y));
+            ctx.fillStyle = '#ff00ff';
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, 10, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillText(player.username, player.x, player.y - 20);
+            if (player.shooting && timestamp - lastShot > 200) {
+                bullets.push({ x: player.x, y: player.y - 10, vy: -10 });
+                lastShot = timestamp;
+            }
+            bullets.forEach(b => {
+                b.y += b.vy;
+                ctx.fillStyle = '#00ff00';
+                ctx.beginPath();
+                ctx.arc(b.x, b.y, 3, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            if (Math.random() < 0.02) spawnEnemy();
+            enemies.forEach(e => {
+                e.x += e.vx;
+                e.y += e.vy;
+                ctx.fillStyle = '#ff0000';
+                ctx.beginPath();
+                ctx.arc(e.x, e.y, 10, 0, Math.PI * 2);
+                ctx.fill();
+                bullets.forEach(b => {
+                    if (Math.hypot(b.x - e.x, b.y - e.y) < 13) {
+                        player.score += 10;
+                        enemies.splice(enemies.indexOf(e), 1);
+                        bullets.splice(bullets.indexOf(b), 1);
+                        if (Math.random() < 0.1) powerUps.push({ x: e.x, y: e.y, type: 'laser' });
+                    }
+                });
+            });
+            powerUps.forEach(p => {
+                ctx.fillStyle = '#ffd700';
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+                ctx.fill();
+                if (Math.hypot(player.x - p.x, player.y - p.y) < 15) {
+                    powerUps.splice(powerUps.indexOf(p), 1);
+                    alert('Laser Beam Activated!');
+                }
+            });
+            document.getElementById('score').innerText = `Score: ${player.score}`;
+            channel.publish('move', { x: player.x, y: player.y, score: player.score, username: player.username });
+            requestAnimationFrame(gameLoop);
+        }
+
+        channel.subscribe('move', msg => {
+            if (msg.clientId !== clientId) {
+                ctx.fillStyle = '#00ffff';
+                ctx.beginPath();
+                ctx.arc(msg.data.x, msg.data.y, 10, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillText(msg.data.username, msg.data.x, msg.data.y - 20);
+            }
+        });
+
+        setInterval(spawnEnemy, 2000);
+        requestAnimationFrame(gameLoop);
+    </script>
+</body>
+</html>
